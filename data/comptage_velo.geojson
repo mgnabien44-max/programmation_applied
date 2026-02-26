@@ -1,0 +1,46 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.377,
+          48.83436
+        ]
+      },
+      "properties": {
+        "id": "100036718",
+        "nom": "39 quai François Mauriac",
+        "date_installation": "2017-07-12",
+        "passages_moyens": 69.4,
+        "passages_total": 348280,
+        "nb_mesures": 5016
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.35702,
+          48.85372
+        ]
+      },
+      "properties": {
+        "id": "100036719",
+        "nom": "18 quai de l'Hôtel de Ville",
+        "date_installation": "2017-07-12",
+        "passages_moyens": 35.3,
+        "passages_total": 175784,
+        "nb_mesures": 4984
+      }
+    }
+  ],
+  "metadata": {
+    "source": "Paris Data — Comptage vélo",
+    "date_extraction": "2026-02-26 14:39",
+    "nombre_compteurs": 2
+  }
+}
