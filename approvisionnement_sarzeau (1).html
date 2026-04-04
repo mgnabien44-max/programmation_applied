@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Approvisionnement cantines – Sarzeau</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { margin:0; font-family:'Segoe UI',Arial,sans-serif; background:#1C3A2A; }
+  #map { height:100vh; width:100%; }
+  .legend {
+    position:fixed; bottom:30px; right:20px;
+    background:rgba(28,58,42,0.97); color:#F5F2EA;
+    padding:16px 20px; border-radius:10px;
+    font-size:12px; z-index:9999;
+    border:1px solid #4A8B3F;
+    box-shadow:0 4px 18px rgba(0,0,0,0.45);
+    min-width:240px;
+  }
+  .legend h3 { margin:0 0 10px 0; font-size:12px; color:#97BC62; letter-spacing:.5px; }
+  .legend-item { display:flex; align-items:center; margin-bottom:6px; }
+  .legend-dot { width:13px; height:13px; border-radius:50%; margin-right:8px; flex-shrink:0; border:2px solid rgba(255,255,255,.3); }
+  .legend-line { width:22px; height:3px; margin-right:8px; flex-shrink:0; border-radius:2px; }
+  .legend hr { border-color:#4A8B3F; margin:8px 0; }
+  .legend .sub { font-style:italic; color:#97BC62; font-size:10px; margin-bottom:6px; }
+  .titre-carte {
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    background:rgba(28,58,42,0.95); color:#F5F2EA;
+    padding:10px 24px; border-radius:8px;
+    font-size:15px; font-weight:bold; z-index:9999;
+    border:1px solid #4A8B3F; text-align:center;
+    box-shadow:0 3px 12px rgba(0,0,0,.4); pointer-events:none;
+  }
+  .titre-carte span { color:#97BC62; font-size:11px; display:block; font-weight:normal; margin-top:2px; }
+  .source {
+    position:fixed; bottom:8px; left:50%; transform:translateX(-50%);
+    background:rgba(28,58,42,.85); color:#97BC62;
+    font-size:10px; padding:4px 14px; border-radius:4px; z-index:9999; pointer-events:none;
+  }
+  .leaflet-popup-content-wrapper { background:#1C3A2A; color:#F5F2EA; border:1px solid #4A8B3F; border-radius:8px; }
+  .leaflet-popup-tip { background:#1C3A2A; }
+  .popup-nom { font-weight:bold; font-size:13px; color:#97BC62; margin-bottom:4px; }
+  .popup-produit { font-size:11px; color:#D97706; margin-bottom:2px; }
+  .popup-cercle { font-size:10px; color:#aaa; font-style:italic; }
+  .popup-dist { font-size:11px; color:#F5F2EA; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="titre-carte">
+  🥦 Approvisionnement des cantines scolaires de Sarzeau
+  <span>Logique « escargot » — entretien Morgane Fraval, 2026</span>
+</div>
+<div id="map"></div>
+<div class="legend">
+  <h3>📍 TYPES DE POINTS</h3>
+  <div class="legend-item"><div class="legend-dot" style="background:#8e44ad;border:3px solid rgba(255,255,255,.5)"></div> Cuisine centrale</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2471a3"></div> Site satellite (livraison)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#27ae60"></div> Ferme partenaire locale</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#16a085"></div> Artisan local</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div> Structure régionale</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div> Hors périmètre (circuit long)</div>
+  <hr>
+  <h3>🔗 FLUX (cuisine → point)</h3>
+  <div class="legend-item"><div class="legend-line" style="background:#8e44ad"></div> → Sites satellites</div>
+  <div class="legend-item"><div class="legend-line" style="background:#27ae60;opacity:.7"></div> → Fermes locales</div>
+  <div class="legend-item"><div class="legend-line" style="background:#e67e22;opacity:.7"></div> → Structures régionales</div>
+  <div class="legend-item"><div class="legend-line" style="background:#c0392b;opacity:.7"></div> → Hors périmètre</div>
+  <hr>
+  <h3>⭕ LOGIQUE « ESCARGOT »</h3>
+  <div class="sub">① ~15 km · ② ~50 km · ③ ~120 km</div>
+</div>
+<div class="source">Conception : Gueye, Bakhoum, Pagni, Agathe, Vallat — 2026 | Sources : Entretien Fraval, Mairie de Sarzeau, OpenStreetMap</div>
+<script>
+const map = L.map('map').setView([47.75, -2.95], 9);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© OpenStreetMap contributors © CARTO',
+  subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+// Cercles concentriques
+[
+  [15000,  "#27ae60", "① ~15 km — Commune de Sarzeau"],
+  [50000,  "#D97706", "② ~50 km — Morbihan / Loire-Atlantique"],
+  [120000, "#c0392b", "③ ~120 km — 5 départements (95%)"],
+].forEach(([r, color, label]) => {
+  L.circle([47.5262, -2.7658], {
+    radius:r, color:color, fill:true,
+    fillColor:color, fillOpacity:0.05,
+    weight:1.5, dashArray:"7,6", opacity:0.5
+  }).addTo(map).bindTooltip(label, {permanent:false, direction:'top'});
+});
+
+// Flux
+L.polyline([[47.5262,-2.7658],[47.531,-2.762]], {color:"#8e44ad",weight:2.5,dashArray:null,opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.5466,-2.7227]], {color:"#8e44ad",weight:2.5,dashArray:null,opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.5414,-2.8166]], {color:"#8e44ad",weight:2.5,dashArray:null,opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.526,-2.646]], {color:"#8e44ad",weight:2.5,dashArray:null,opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.519,-2.785]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.535,-2.74]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.522,-2.755]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.528,-2.79]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.527,-2.764]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.5156,-2.4731]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.528,-2.485]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.993,-2.536]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.563,-2.572]], {color:"#27ae60",weight:1.8,dashArray:"6,5",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.7485,-3.3674]], {color:"#e67e22",weight:1.8,dashArray:"5,6",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.669,-2.981]], {color:"#e67e22",weight:1.8,dashArray:"5,6",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[47.041,-1.772]], {color:"#e67e22",weight:1.8,dashArray:"5,6",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[48.0,-4.098]], {color:"#e67e22",weight:1.8,dashArray:"5,6",opacity:0.65}).addTo(map);
+L.polyline([[47.5262,-2.7658],[48.329,-1.834]], {color:"#c0392b",weight:1.5,dashArray:"4,7",opacity:0.65}).addTo(map);
+
+// Marqueurs
+
+L.circleMarker([47.5262, -2.7658], {
+  radius: 14, fillColor: "#8e44ad",
+  color: "#fff", weight: 3,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Cuisine Centrale Sarzeau</div>
+  <div class="popup-produit">🏷️ Nœud logistique</div>
+  <div class="popup-cercle">Réseau interne</div>
+  
+`);
+
+L.marker([47.534200000000006, -2.7658], {
+  icon: L.divIcon({
+    className: '',
+    html: '<div style="background:rgba(142,68,173,0.9);color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:bold;white-space:nowrap;">🍳 Cuisine Centrale</div>',
+    iconAnchor: [60, 0]
+  })
+}).addTo(map);
+
+L.circleMarker([47.531, -2.762], {
+  radius: 9, fillColor: "#2471a3",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">École Marie-Le-Franc (centre-bourg)</div>
+  <div class="popup-produit">🏷️ Satellite</div>
+  <div class="popup-cercle">Réseau interne</div>
+  <div class=\'popup-dist\'>📏 1 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.5466, -2.7227], {
+  radius: 9, fillColor: "#2471a3",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Rest. Saint-Colombier</div>
+  <div class="popup-produit">🏷️ Satellite</div>
+  <div class="popup-cercle">Réseau interne</div>
+  <div class=\'popup-dist\'>📏 4 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.5414, -2.8166], {
+  radius: 9, fillColor: "#2471a3",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Rest. Brillac</div>
+  <div class="popup-produit">🏷️ Satellite</div>
+  <div class="popup-cercle">Réseau interne</div>
+  <div class=\'popup-dist\'>📏 4 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.526, -2.646], {
+  radius: 9, fillColor: "#2471a3",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">École Les Courlis (Tour-du-Parc)</div>
+  <div class="popup-produit">🏷️ Satellite</div>
+  <div class="popup-cercle">Réseau interne</div>
+  <div class=\'popup-dist\'>📏 9 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.519, -2.785], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">EARL du Bohat</div>
+  <div class="popup-produit">🏷️ Céréales</div>
+  <div class="popup-cercle">① Cercle Sarzeau</div>
+  <div class=\'popup-dist\'>📏 2 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.535, -2.74], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Ferme du Boceno</div>
+  <div class="popup-produit">🏷️ Maraîchage</div>
+  <div class="popup-cercle">① Cercle Sarzeau</div>
+  <div class=\'popup-dist\'>📏 2 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.522, -2.755], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Ferme de l\'Épi d\'or</div>
+  <div class="popup-produit">🏷️ Céréales</div>
+  <div class="popup-cercle">① Cercle Sarzeau</div>
+  <div class=\'popup-dist\'>📏 1 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.528, -2.79], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">GAEC de Kervail</div>
+  <div class="popup-produit">🏷️ Bovins</div>
+  <div class="popup-cercle">① Cercle Sarzeau</div>
+  <div class=\'popup-dist\'>📏 2 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.527, -2.764], {
+  radius: 8, fillColor: "#16a085",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Boulangerie de Sarzeau</div>
+  <div class="popup-produit">🏷️ Pain bio</div>
+  <div class="popup-cercle">① Cercle Sarzeau</div>
+  <div class=\'popup-dist\'>📏 0 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.5156, -2.4731], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Ferme de Kerlambert (Muzillac)</div>
+  <div class="popup-produit">🏷️ Maraîchage</div>
+  <div class="popup-cercle">② Cercle Morbihan / Loire-Atlantique</div>
+  <div class=\'popup-dist\'>📏 22 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.528, -2.485], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Ferme de Kerbizien (Noyal-Muzillac)</div>
+  <div class="popup-produit">🏷️ Volailles</div>
+  <div class="popup-cercle">② Cercle Morbihan / Loire-Atlantique</div>
+  <div class=\'popup-dist\'>📏 21 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.993, -2.536], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">EARL La Crème Rit (Guilliers)</div>
+  <div class="popup-produit">🏷️ Laitier</div>
+  <div class="popup-cercle">② Cercle Morbihan / Loire-Atlantique</div>
+  <div class=\'popup-dist\'>📏 55 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.563, -2.572], {
+  radius: 8, fillColor: "#27ae60",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Le Jardin de Brarun (Surzur)</div>
+  <div class="popup-produit">🏷️ Maraîchage bio</div>
+  <div class="popup-cercle">② Cercle Morbihan / Loire-Atlantique</div>
+  <div class=\'popup-dist\'>📏 15 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.7485, -3.3674], {
+  radius: 8, fillColor: "#e67e22",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Top Atlantique (Lorient — poisson)</div>
+  <div class="popup-produit">🏷️ Poisson</div>
+  <div class="popup-cercle">③ Cercle 5 départements (95%)</div>
+  <div class=\'popup-dist\'>📏 51 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.669, -2.981], {
+  radius: 8, fillColor: "#e67e22",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Kervadec (Auray — bœuf)</div>
+  <div class="popup-produit">🏷️ Bœuf</div>
+  <div class="popup-cercle">③ Cercle 5 départements (95%)</div>
+  <div class=\'popup-dist\'>📏 23 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([47.041, -1.772], {
+  radius: 8, fillColor: "#e67e22",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">La Filière Bio 56 (Grandchamps)</div>
+  <div class="popup-produit">🏷️ Fruits/légumes bio</div>
+  <div class="popup-cercle">③ Cercle 5 départements (95%)</div>
+  <div class=\'popup-dist\'>📏 92 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([48.0, -4.098], {
+  radius: 8, fillColor: "#e67e22",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Askell (Quimper — porc)</div>
+  <div class="popup-produit">🏷️ Porc</div>
+  <div class="popup-cercle">③ Cercle 5 départements (95%)</div>
+  <div class=\'popup-dist\'>📏 113 km de la cuisine centrale</div>
+`);
+
+L.circleMarker([48.329, -1.834], {
+  radius: 8, fillColor: "#c0392b",
+  color: "#fff", weight: 2,
+  fillOpacity: 0.92, opacity: 1
+}).addTo(map).bindPopup(`
+  <div class="popup-nom">Biocoop Restauration (Tinténiac)</div>
+  <div class="popup-produit">🏷️ Fruits/légumes bio</div>
+  <div class="popup-cercle">④ Hors périmètre — circuit long</div>
+  <div class=\'popup-dist\'>📏 113 km de la cuisine centrale</div>
+`);
+
+</script>
+</body>
+</html>
